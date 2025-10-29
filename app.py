@@ -29,7 +29,7 @@ if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
 CLIENT_ID = "518cdebe485bb9e24f0d7e717e45614f8ae856d8"
 CLIENT_SECRET = "6092684fda7d8df500cd2f47b2921f1f13f22e0229f74fe8995f556681fc"
 TOKEN_URL = "https://bling.com.br/Api/v3/oauth/token"
-TOKEN_FILE = r'C:\Users\LeonardoCampos\HBox\MEU DRIVE\BEES\Bling\bling_token.json'
+TOKEN_FILE = 'bling_token.json'
 NFE_API_URL = "https://api.bling.com.br/Api/v3/nfe"
 
 # ---------- Funções de Token ----------
@@ -250,3 +250,4 @@ if st.button("🔍 Buscar Notas Fiscais"):
                         file_name=f"notas_{tipo_nota}_{data_inicio.strftime('%d-%m-%Y')}_{data_fim.strftime('%d-%m-%Y')}.csv",
                         mime="text/csv"
                     )
+
