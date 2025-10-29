@@ -6,6 +6,7 @@ import io
 import time
 import requests
 import json
+
 # ---------- Autenticação Simples ----------
 def login():
     st.title("🔐 Acesso Restrito")
@@ -29,7 +30,7 @@ if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
 CLIENT_ID = "518cdebe485bb9e24f0d7e717e45614f8ae856d8"
 CLIENT_SECRET = "6092684fda7d8df500cd2f47b2921f1f13f22e0229f74fe8995f556681fc"
 TOKEN_URL = "https://bling.com.br/Api/v3/oauth/token"
-TOKEN_FILE = 'bling_token.json'
+TOKEN_FILE ='bling_token.json'
 NFE_API_URL = "https://api.bling.com.br/Api/v3/nfe"
 
 # ---------- Funções de Token ----------
@@ -79,15 +80,6 @@ def obter_token_valido():
     return token_data["access_token"] if token_data else None
 
 # ---------- Funções de notas ----------
-def parse_data_emissao(data_str):
-    """
-    Converte string de data no formato brasileiro 'dd/mm/yyyy' em datetime.date
-    """
-    try:
-        return datetime.strptime(data_str, "%d/%m/%Y").date()
-    except ValueError:
-        raise ValueError(f"Formato de data inválido: {data_str}. Use dd/mm/yyyy")
-
 def get_single_invoice_details(nfe_id, access_token, max_retries=5):
     url = f"{NFE_API_URL}/{nfe_id}"
     headers = {'Accept': 'application/json', 'Authorization': f'Bearer {access_token}'}
@@ -176,6 +168,9 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
     page = 1
     all_rows = []
     headers = {'Accept': 'application/json', 'Authorization': f'Bearer {access_token}'}
+    progresso = st.progress(0)
+    total_encontradas = 0
+
     while True:
         params = {
             'pagina': page,
@@ -190,16 +185,13 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
             break
 
         nfes = response.json().get("data", [])
-        st.info(f"Página {page}: {len(nfes)} notas retornadas pela API.")  # debug
 
         if not nfes:
             break
 
         for nfe in nfes:
-            # converte data Emissão da API para objeto date (tenta dois formatos)
             data_emissao_str = nfe.get("dataEmissao")
             if not data_emissao_str:
-                # se não existir campo, pula
                 continue
 
             try:
@@ -208,11 +200,8 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
                 try:
                     data_emissao = datetime.strptime(data_emissao_str, "%Y-%m-%d").date()
                 except ValueError:
-                    # formato desconhecido — pula e loga
-                    st.warning(f"Formato de data desconhecido: '{data_emissao_str}' (id {nfe.get('id')})")
                     continue
 
-            # agora sim filtra por período
             if not (data_inicio <= data_emissao <= data_fim):
                 continue
 
@@ -220,39 +209,39 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
             if detailed_invoice:
                 rows = process_invoice_to_rows(detailed_invoice)
                 all_rows.extend(rows)
+                total_encontradas += 1
+                progresso.progress(min(total_encontradas / 100, 1.0))
 
-        # lógica de paginação: se menos que 100, terminou
         if len(nfes) < 100:
             break
         page += 1
 
+    progresso.empty()
     df = pd.DataFrame(all_rows)
-    # Formata colunas de data para dd/mm/yyyy
     for col in df.columns:
         if "data" in col.lower():
             df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%d/%m/%Y')
     return df
 
-
 # ---------- Streamlit ----------
 st.set_page_config(page_title="Notas Fiscais Bling", layout="wide")
 st.title("📄 Download de Notas Fiscais - Bling")
-st.markdown(
-    "<h4 style='color: blue;'>Por Leonardo Campos</h4>",
-    unsafe_allow_html=True
-)
-
 st.markdown("Selecione o período e o tipo de nota para baixar em CSV.")
 
-tipo_nota = st.selectbox("Tipo de Nota", ["E", "S"], format_func=lambda x: "Entrada" if x=="E" else "Saída")
-data_inicio = st.date_input("Data Inicial", date.today() - timedelta(days=30))
-st.write("Data selecionada:", data_inicio.strftime("%d/%m/%Y"))
+# Inputs e botão na horizontal
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
-data_fim = st.date_input("Data Final", date.today())
-st.write("Data selecionada:", data_fim.strftime("%d/%m/%Y"))
+with col1:
+    tipo_nota = st.selectbox("Tipo de Nota", ["E", "S"], format_func=lambda x: "Entrada" if x=="E" else "Saída")
+with col2:
+    data_inicio = st.date_input("Data Inicial", date.today() - timedelta(days=30))
+with col3:
+    data_fim = st.date_input("Data Final", date.today())
+with col4:
+    buscar_btn = st.button("🔍 Buscar Notas Fiscais")
 
-
-if st.button("🔍 Buscar Notas Fiscais"):
+# Busca das notas
+if buscar_btn:
     if data_inicio > data_fim:
         st.error("Data inicial não pode ser maior que a final!")
     else:
@@ -273,4 +262,5 @@ if st.button("🔍 Buscar Notas Fiscais"):
                 else:
                     st.warning(f"⚠️ Nenhuma nota encontrada entre {data_inicio.strftime('%d/%m/%Y')} e {data_fim.strftime('%d/%m/%Y')} para o tipo selecionado.")
 
-
+# Rodapé colorido
+st.markdown('<p style="text-align:center; color: blue; font-size:15px;">Por Leonardo Campos</p>', unsafe_allow_html=True)
