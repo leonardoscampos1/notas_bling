@@ -217,7 +217,11 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
 # ---------- Streamlit ----------
 st.set_page_config(page_title="Notas Fiscais Bling", layout="wide")
 st.title("📄 Download de Notas Fiscais - Bling")
-st.markdown("Por Leonardo Campos")
+st.markdown(
+    "<h4 style='color: blue;'>Por Leonardo Campos</h4>",
+    unsafe_allow_html=True
+)
+
 st.markdown("Selecione o período e o tipo de nota para baixar em CSV.")
 
 tipo_nota = st.selectbox("Tipo de Nota", ["E", "S"], format_func=lambda x: "Entrada" if x=="E" else "Saída")
