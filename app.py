@@ -29,7 +29,7 @@ if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
 CLIENT_ID = "518cdebe485bb9e24f0d7e717e45614f8ae856d8"
 CLIENT_SECRET = "6092684fda7d8df500cd2f47b2921f1f13f22e0229f74fe8995f556681fc"
 TOKEN_URL = "https://bling.com.br/Api/v3/oauth/token"
-TOKEN_FILE = 'bling_token.json'
+TOKEN_FILE = r'C:\Users\LeonardoCampos\HBox\MEU DRIVE\BEES\Bling\bling_token.json'
 NFE_API_URL = "https://api.bling.com.br/Api/v3/nfe"
 
 # ---------- Funções de Token ----------
@@ -184,25 +184,44 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
             'tipo': tipo_nota
         }
         response = requests.get(NFE_API_URL, headers=headers, params=params)
+
         if response.status_code != 200:
+            st.error(f"Erro ao consultar NFE (status {response.status_code}). Conteúdo: {response.text}")
             break
+
         nfes = response.json().get("data", [])
+        st.info(f"Página {page}: {len(nfes)} notas retornadas pela API.")  # debug
+
         if not nfes:
             break
-        for nfe in nfes:
-            # converte data Emissão da API para objeto date
-            data_emissao_str = nfe.get("dataEmissao")
-        try:
-            data_emissao = datetime.strptime(data_emissao_str, "%Y-%m-%d %H:%M:%S").date()
-        except ValueError:
-            data_emissao = datetime.strptime(data_emissao_str, "%Y-%m-%d").date()
 
+        for nfe in nfes:
+            # converte data Emissão da API para objeto date (tenta dois formatos)
+            data_emissao_str = nfe.get("dataEmissao")
+            if not data_emissao_str:
+                # se não existir campo, pula
+                continue
+
+            try:
+                data_emissao = datetime.strptime(data_emissao_str, "%Y-%m-%d %H:%M:%S").date()
+            except ValueError:
+                try:
+                    data_emissao = datetime.strptime(data_emissao_str, "%Y-%m-%d").date()
+                except ValueError:
+                    # formato desconhecido — pula e loga
+                    st.warning(f"Formato de data desconhecido: '{data_emissao_str}' (id {nfe.get('id')})")
+                    continue
+
+            # agora sim filtra por período
             if not (data_inicio <= data_emissao <= data_fim):
                 continue
+
             detailed_invoice = get_single_invoice_details(str(nfe.get("id")), access_token)
             if detailed_invoice:
                 rows = process_invoice_to_rows(detailed_invoice)
                 all_rows.extend(rows)
+
+        # lógica de paginação: se menos que 100, terminou
         if len(nfes) < 100:
             break
         page += 1
@@ -213,6 +232,7 @@ def buscar_notas_df(access_token, data_inicio, data_fim, tipo_nota):
         if "data" in col.lower():
             df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%d/%m/%Y')
     return df
+
 
 # ---------- Streamlit ----------
 st.set_page_config(page_title="Notas Fiscais Bling", layout="wide")
@@ -241,7 +261,7 @@ if st.button("🔍 Buscar Notas Fiscais"):
             with st.spinner("Buscando notas... ⏳"):
                 df = buscar_notas_df(token, data_inicio, data_fim, tipo_nota)
                 if not df.empty:
-                    st.dataframe(df)  # preview das notas
+                    st.dataframe(df)
                     csv_buffer = io.StringIO()
                     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                     st.download_button(
@@ -250,4 +270,6 @@ if st.button("🔍 Buscar Notas Fiscais"):
                         file_name=f"notas_{tipo_nota}_{data_inicio.strftime('%d-%m-%Y')}_{data_fim.strftime('%d-%m-%Y')}.csv",
                         mime="text/csv"
                     )
+                else:
+                    st.warning(f"⚠️ Nenhuma nota encontrada entre {data_inicio.strftime('%d/%m/%Y')} e {data_fim.strftime('%d/%m/%Y')} para o tipo selecionado.")
 
